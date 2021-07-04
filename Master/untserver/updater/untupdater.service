@@ -1,0 +1,15 @@
+#/etc/systemd/system/untupdater.service
+[Unit]
+Description=Check rss feed and update unturned servers
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=untserver
+ExecStart=/home/untserver/script/updater/daemonupdate.sh
+ExecStop=pkill -f "daemonupdater"
+
+[Install]
+WantedBy=multi-user.target
