@@ -67,7 +67,7 @@ then
     #Send the message across the whole defined network
     for hostname in $hostslist
     do
-        (for server in ${hostservers["$(echo "$hostname" | cut -d. -f1)"]}; do ssh untserver@"${hostname}" "tmux send-keys -t $server:0 Space Enter; tmux send-keys -t $server:0 \"broadcast FFAA00 ${broadcast[$i]//[$'\r\n']}\" Enter" & done) &
+        (for server in ${hostservers["$(echo "$hostname" | cut -d. -f1)"]}; do (ssh untserver@"${hostname}" "tmux send-keys -t $server:0 Space Enter; tmux send-keys -t $server:0 \"broadcast FFAA00 ${broadcast[$i]//[$'\r\n']}\" Enter"; echo "\"broadcast FFAA00 ${broadcast[$i]//[$'\r\n']}\"") & done) &
     done
 
     #Remove the array from memory
@@ -82,8 +82,9 @@ then
 else
     for j in "${broadcast[@]}"
     do
-       echo "$j"
+       echo $j
     done > "$broadcastlistdir"
 fi
 
+echo -e "Message sent"
 exit 0
