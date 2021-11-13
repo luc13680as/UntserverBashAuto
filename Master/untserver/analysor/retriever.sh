@@ -29,11 +29,11 @@ do
 	(
 	for server in ${hostservers["$hostnametrunc"]};
 	do
-		logdate=$(ssh untserver@"${hostname}" "date -r \$HOME/serverfiles/Logs/Server_$server_Prev.log '+%Y-%m-%d-%H-%M'");
-		ssh untserver@"${hostname}" "mv \$HOME/serverfiles/Logs/Server_$server_Prev.log $server-logdate";
+		logdate=$(ssh untserver@"${hostname}" "date -r \$HOME/serverfiles/Logs/Server_${server}_Prev.log '+%Y-%m-%d-%H-%M'");
+		ssh untserver@"${hostname}" "mv \$HOME/serverfiles/Logs/Server_${server}_Prev.log $server-$logdate";
 	done;
 
-    scp -rpv untserver@"${hostname}":/home/untserver/serverfiles/Logs/Server_*_Prev.log "$logsdir"/; 
+    scp -rp untserver@"${hostname}":/home/untserver/serverfiles/Logs/Server_*_Prev.log "$logsdir"/; 
     ssh untserver@"${hostname}" "[[ -d $logbackupdir ]] || mkdir -p $logbackupdir";
     ssh untserver@"${hostname}" "mv /home/untserver/serverfiles/Logs/Server_*_Prev.log $logbackupdir") &
 
