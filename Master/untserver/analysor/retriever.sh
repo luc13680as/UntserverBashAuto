@@ -14,7 +14,7 @@ source "$HOME"/script/servers.sh
 
 scriptdir="${0%/*}"
 logsdir=$scriptdir/collected
-logbackupdir=/backup/logs
+logbackupdir=$HOME/backup/logs
 
 #Verifying if everything is here
 [[ -d $logsdir ]] || mkdir -p "$logsdir"
