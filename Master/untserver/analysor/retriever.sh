@@ -26,6 +26,7 @@ declare -A nodepidstop
 
 for hostname in $hostslist
 do
+	hostnametrunc=$(echo "$hostname" | cut -d. -f1)
 	(
 	for server in ${hostservers["$hostnametrunc"]};
 	do
