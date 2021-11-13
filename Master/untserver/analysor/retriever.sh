@@ -26,7 +26,14 @@ declare -A nodepidstop
 
 for hostname in $hostslist
 do
-	(scp -rpv untserver@"${hostname}":/home/untserver/serverfiles/Logs/Server_*_Prev.log "$logsdir"/; 
+	(
+	for server in ${hostservers["$hostnametrunc"]};
+	do
+		logdate=$(ssh untserver@"${hostname}" "date -r \$HOME/serverfiles/Logs/Server_$server_Prev.log '+%Y-%m-%d-%H-%M'");
+		ssh untserver@"${hostname}" "mv \$HOME/serverfiles/Logs/Server_$server_Prev.log $server-logdate";
+	done;
+
+    scp -rpv untserver@"${hostname}":/home/untserver/serverfiles/Logs/Server_*_Prev.log "$logsdir"/; 
     ssh untserver@"${hostname}" "[[ -d $logbackupdir ]] || mkdir -p $logbackupdir";
     ssh untserver@"${hostname}" "mv /home/untserver/serverfiles/Logs/Server_*_Prev.log $logbackupdir") &
 
