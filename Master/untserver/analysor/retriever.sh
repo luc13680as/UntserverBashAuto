@@ -25,7 +25,7 @@ declare -A nodepidstop
 
 for hostname in $hostslist
 do
-	scp -rpv "untserver@${hostname}:/home/untserver/serverfiles/Logs/Server_*_Prev.log $logsdir/" &
+	scp -rpv untserver@"${hostname}":/home/untserver/serverfiles/Logs/Server_*_Prev.log "$logsdir"/ &
 	nodepidstop["hostnametrunc"]=$!
 done
 
