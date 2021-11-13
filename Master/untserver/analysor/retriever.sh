@@ -20,7 +20,17 @@ logsdir=$scriptdir/collected
 
 echo -e "Launching the retrieve process"
 
+#Store each node's subprocess pid
+declare -A nodepidstop
 
+for hostname in $hostslist
+do
+	scp -rpv "untserver@${hostname}:/home/untserver/serverfiles/Logs/Server_*_Prev.log $logsdir/" &
+	nodepidstop["hostnametrunc"]=$!
+done
 
-#cd ./serverfiles/Logs/
-#find Server_pastanetwork1_Prev.log
+wait "${nodepidstop[@]}"
+
+echo -e "Files received !"
+
+exit 0
