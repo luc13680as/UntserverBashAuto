@@ -26,17 +26,27 @@ declare -A nodepidstop
 
 for hostname in $hostslist
 do
+	#Temporary
 	hostnametrunc=$(echo "$hostname" | cut -d. -f1)
 	(
+    ssh untserver@"${hostname}" "[[ -d $logbackupdir ]] || mkdir -p $logbackupdir";
+
 	for server in ${hostservers["$hostnametrunc"]};
 	do
+		#Get the date of the file and apply it to the name
 		logdate=$(ssh untserver@"${hostname}" "date -r \$HOME/serverfiles/Logs/Server_${server}_Prev.log '+%Y-%m-%d-%H-%M'");
 		ssh untserver@"${hostname}" "mv \$HOME/serverfiles/Logs/Server_${server}_Prev.log $server-$logdate";
-	done;
 
-    scp -rp untserver@"${hostname}":/home/untserver/serverfiles/Logs/Server_*_Prev.log "$logsdir"/; 
-    ssh untserver@"${hostname}" "[[ -d $logbackupdir ]] || mkdir -p $logbackupdir";
-    ssh untserver@"${hostname}" "mv /home/untserver/serverfiles/Logs/Server_*_Prev.log $logbackupdir") &
+        #Get the file and make a backup of it
+	    scp -rp untserver@"${hostname}":$HOME/serverfiles/Logs/$server-$logdate.log "$logsdir"/;
+	      #Distant copy
+        ssh untserver@"${hostname}" "mv \$HOME/serverfiles/Logs/$server-$logdate.log $logbackupdir/";
+
+          #Local copy
+        [[ -d $logbackupdir ]] || mkdir -p $logbackupdir
+        cp "$logsdir/$server-$logdate.log" $logbackupdir
+
+	done) &
 
 	nodepidstop["hostnametrunc"]=$!
 done
