@@ -4,7 +4,7 @@
 #                                                             #
 # Name: DailyMaster                                           #
 # Description: Execute the daily routine on other hosts       #
-# Version: 1.2                                                #
+# Version: 1.3                                                #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -19,6 +19,10 @@ date=$(date '+%Y-%m-%d-%H-%M')
 backupdir="$HOME/backup/servers"
 discorddir="$HOME/discord/alert"
 
+#Cloud backup with rclone
+rcloneremotename="pastaremote"
+rclonebucketname="Pastanetwork-Unturned-Dev"
+
 #Verifying if everything is here
 [[ -d $backupdir ]] || mkdir -p "$backupdir"
 
@@ -32,7 +36,7 @@ echo -e "Sending discord notification"
 echo -e "Warning players of the restart !" 
 
 #Broadcasting and shutdown of servers on the list
-i=300
+i=30
 while [[ "$i" -ge 0 ]]
 do
 	echo -e "Restart in $i seconds !"
@@ -79,15 +83,20 @@ do
             wait "${serverpidstop[@]}"; 
             
             echo "The node $hostnametrunc is now down"; 
+
+            #ssh untserver@"${hostname}" "rm $(ls -t $backupdir | tail -1)";
             
-            ssh untserver@"${hostname}" "tar -czvf $backupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers" #&
+            ssh untserver@"${hostname}" "tar -czvf $backupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers";
             #backuppid=$!;
             
             #wait "$backuppid"; 
 
-            [[ -d $backupdir/$hostnametrunc ]] || mkdir -p "$backupdir/$hostnametrunc"
+            [[ -d $backupdir/$hostnametrunc ]] || mkdir -p "$backupdir/$hostnametrunc";
             
-            scp -rp "untserver@${hostname}:$backupdir/$hostnametrunc-$date.tar.gz" "$backupdir/$hostnametrunc" & 
+            scp -rp "untserver@${hostname}:$backupdir/$hostnametrunc-$date.tar.gz" "$backupdir/$hostnametrunc";
+
+            #Send a backup with rclone on the cloud
+            rclone copy "$backupdir" "$rcloneremotename:/$rclonebucketname/" &
                 
             for server in ${hostservers["$hostnametrunc"]}; 
             do 
