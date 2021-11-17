@@ -72,19 +72,22 @@ do
             	
             for server in ${hostservers["$hostnametrunc"]}; 
             do 
-            	ssh untserver@"${hostname}" "\$HOME/$server stop" & serverpidstop["$server"]=$!; 
+            	ssh untserver@"${hostname}" "\$HOME/$server stop" & 
+            	serverpidstop["$server"]=$!; 
             done; 
             
             wait "${serverpidstop[@]}"; 
             
             echo "The node $hostnametrunc is now down"; 
             
-            ssh untserver@"${hostname}" "tar -czvf $backupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers" & 
-            backuppid=$!;
+            ssh untserver@"${hostname}" "tar -czvf $backupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers" #&
+            #backuppid=$!;
             
-            wait "$backuppid"; 
+            #wait "$backuppid"; 
+
+            [[ -d $backupdir/$hostnametrunc ]] || mkdir -p "$backupdir/$hostnametrunc"
             
-            scp -rp "untserver@${hostname}:$backupdir/$hostnametrunc-$date.tar.gz" "$backupdir/$hostnametrunc/" & 
+            scp -rp "untserver@${hostname}:$backupdir/$hostnametrunc-$date.tar.gz" "$backupdir/$hostnametrunc" & 
                 
             for server in ${hostservers["$hostnametrunc"]}; 
             do 
