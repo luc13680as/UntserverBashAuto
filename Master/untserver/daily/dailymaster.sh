@@ -16,7 +16,8 @@ echo -e "Launching daily procedure !"
 
 #Set the offset to have the correct date on data
 date=$(date '+%Y-%m-%d-%H-%M')
-backupdir="$HOME/backup/servers"
+backupdir="$HOME/backup"
+serverbackupdir="$backupdir/servers"
 discorddir="$HOME/discord/alert"
 
 #Cloud backup with rclone
@@ -24,7 +25,7 @@ rcloneremotename="pastaremote"
 rclonebucketname="Pastanetwork-Unturned-Dev"
 
 #Verifying if everything is here
-[[ -d $backupdir ]] || mkdir -p "$backupdir"
+[[ -d $serverbackupdir ]] || mkdir -p "$serverbackupdir"
 
 echo -e "Backup date set on $date"
 
@@ -68,7 +69,7 @@ do
 
 		    hostnametrunc=$(echo "$hostname" | cut -d. -f1)
 
-		    ssh untserver@"${hostname}" "[[ -d $backupdir ]] || mkdir -p $backupdir";
+		    ssh untserver@"${hostname}" "[[ -d $serverbackupdir ]] || mkdir -p $serverbackupdir";
 
             #Execute stop, backup commands in a subprocess
             (
@@ -83,20 +84,12 @@ do
             wait "${serverpidstop[@]}"; 
             
             echo "The node $hostnametrunc is now down"; 
-
-            #ssh untserver@"${hostname}" "rm $(ls -t $backupdir | tail -1)";
             
-            ssh untserver@"${hostname}" "tar -czvf $backupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers";
-            #backuppid=$!;
-            
-            #wait "$backuppid"; 
+            ssh untserver@"${hostname}" "tar -czvf $serverbackupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers";
 
-            [[ -d $backupdir/$hostnametrunc ]] || mkdir -p "$backupdir/$hostnametrunc";
+            [[ -d $serverbackupdir/$hostnametrunc ]] || mkdir -p "$serverbackupdir/$hostnametrunc";
             
-            scp -rp "untserver@${hostname}:$backupdir/$hostnametrunc-$date.tar.gz" "$backupdir/$hostnametrunc";
-
-            #Send a backup with rclone on the cloud
-            rclone copy "$backupdir" "$rcloneremotename:/$rclonebucketname/" &
+            scp -rp "untserver@${hostname}:$serverbackupdir/$hostnametrunc-$date.tar.gz" "$serverbackupdir/$hostnametrunc";
                 
             for server in ${hostservers["$hostnametrunc"]}; 
             do 
@@ -112,4 +105,5 @@ do
 	fi
 done
 
-
+#Send a backup with rclone on the cloud
+rclone copy "$backupdir" "$rcloneremotename:/$rclonebucketname"
