@@ -4,7 +4,7 @@
 #                                                             #
 # Name: DailyMaster                                           #
 # Description: Execute the daily routine on other hosts       #
-# Version: 1.3                                                #
+# Version: 1.3.1                                              #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -37,7 +37,7 @@ echo -e "Sending discord notification"
 echo -e "Warning players of the restart !" 
 
 #Broadcasting and shutdown of servers on the list
-i=30
+i=300
 while [[ "$i" -ge 0 ]]
 do
 	echo -e "Restart in $i seconds !"
@@ -85,7 +85,7 @@ do
             
             echo "The node $hostnametrunc is now down"; 
             
-            ssh untserver@"${hostname}" "tar -czvf $serverbackupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers";
+            ssh untserver@"${hostname}" "tar -czvf $serverbackupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers /home/untserver/lgsm/config-lgsm/untserver";
 
             [[ -d $serverbackupdir/$hostnametrunc ]] || mkdir -p "$serverbackupdir/$hostnametrunc";
             
