@@ -37,7 +37,7 @@ echo -e "Sending discord notification"
 echo -e "Warning players of the restart !" 
 
 #Broadcasting and shutdown of servers on the list
-i=30
+i=300
 while [[ "$i" -ge 0 ]]
 do
 	echo -e "Restart in $i seconds !"
@@ -65,7 +65,6 @@ do
 	    do
 
 		    hostnametrunc=$(echo "$hostname" | cut -d. -f1)
-
 
             echo "Checking the backup directory of $hostnametrunc"
 		    ssh untserver@"${hostname}" "[[ -d $serverbackupdir ]] || mkdir -p $serverbackupdir";
