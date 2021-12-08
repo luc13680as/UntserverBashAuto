@@ -4,7 +4,7 @@
 #                                                             #
 # Name: Updater                                               #
 # Description: Update servers on every hosts                  #
-# Version: 1.0                                                #
+# Version: 1.1                                                #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -53,9 +53,6 @@ do
 		done
 	done
 
-	sleep 30
-	((i=i-30))
-
 	if [[ "$i" -eq 0 ]]
 	then
 		echo -e "Servers will be shutdown now"
@@ -69,6 +66,7 @@ do
 
 		    hostnametrunc=$(echo "$hostname" | cut -d. -f1)
 
+            echo "Checking the backup directory of $hostnametrunc"
 		    ssh untserver@"${hostname}" "[[ -d $serverbackupdir ]] || mkdir -p $serverbackupdir";
 
             #Execute stop, backup commands in a subprocess
@@ -77,7 +75,8 @@ do
             	
             for server in ${hostservers["$hostnametrunc"]}; 
             do 
-            	ssh untserver@"${hostname}" "\$HOME/$server stop" & 
+            	echo "Stoping server $server"
+            	ssh untserver@"${hostname}" "\$HOME/$server stop" > /dev/null & 
             	serverpidstop["$server"]=$!; 
             done; 
             
@@ -85,10 +84,12 @@ do
             
             echo "The node $hostnametrunc is now down"; 
             
+            echo "Backup of the node $hostnametrunc"
             ssh untserver@"${hostname}" "tar -czvf $serverbackupdir/$hostnametrunc-$date.tar.gz /home/untserver/serverfiles/Servers";
 
             [[ -d $serverbackupdir/$hostnametrunc ]] || mkdir -p "$serverbackupdir/$hostnametrunc";
             
+            echo "Receiving backup from the node $hostnametrunc"
             scp -rp "untserver@${hostname}:$serverbackupdir/$hostnametrunc-$date.tar.gz" "$serverbackupdir/$hostnametrunc";
 
             ssh untserver@"${hostname}" "\$HOME/$(echo "$configcontent" | grep "$hostnametrunc" | cut -d, -f1 | head -1) update";
@@ -106,7 +107,13 @@ do
 	    done
 	    wait "${nodepidstop[@]}"
 	fi
+
+	sleep 30
+	((i=i-30))
 done
 
 #Send a backup with rclone on the cloud
+echo "sending backups to the cloud"
 rclone copy "$backupdir" "$rcloneremotename:/$rclonebucketname"
+
+echo "Done !"
