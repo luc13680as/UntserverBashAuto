@@ -4,7 +4,7 @@
 #                                                             #
 # Name: Retriever                                             #
 # Description: Retrieve logs file from servers                #
-# Version: 1.0                                                #
+# Version: 1.1                                                #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -34,8 +34,9 @@ do
 
 	for server in ${hostservers["$hostnametrunc"]};
 	do
-		if ssh -q untserver@"${hostname}" "test /home/untserver/serverfiles/Logs/Server_${server}_Prev.log";
+		if ssh -q untserver@"${hostname}" "[[ -f /home/untserver/serverfiles/Logs/Server_${server}_Prev.log ]]";
 		then
+
 			echo "File found for $server";
 
 		    #Get the date of the file and apply it to the name
@@ -52,6 +53,8 @@ do
 
               #Local copy
             cp "$logsdir/$server-$logdate.log" $logbackupdir;
+        else
+        	echo "File not found for $server";
         fi;
 	done) &
 
@@ -60,6 +63,6 @@ done
 
 wait "${nodepidstop[@]}"
 
-echo -e "Files received !"
+echo -e "Done !"
 
 exit 0
