@@ -66,7 +66,7 @@ do
 
 		    hostnametrunc=$(echo "$hostname" | cut -d. -f1)
 
-            echo "Checking the backup directory of $hostnametrunc"
+                    echo "Checking the backup directory of $hostnametrunc"
 		    ssh untserver@"${hostname}" "[[ -d $serverbackupdir ]] || mkdir -p $serverbackupdir";
 
             #Execute stop, backup commands in a subprocess
@@ -76,6 +76,7 @@ do
             for server in ${hostservers["$hostnametrunc"]}; 
             do 
             	echo "Stoping server $server"
+		ssh untserver@"${hostname}" "tmux send-keys -t $server:0 Space Enter; tmux send-keys -t $server:0 'save'  Enter"
             	ssh untserver@"${hostname}" "\$HOME/$server stop" > /dev/null & 
             	serverpidstop["$server"]=$!; 
             done; 
