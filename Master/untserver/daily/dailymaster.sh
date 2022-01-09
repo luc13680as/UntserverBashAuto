@@ -77,6 +77,7 @@ do
             for server in ${hostservers["$hostnametrunc"]}; 
             do
             	echo "Stoping server $server"
+		ssh untserver@"${hostname}" "tmux send-keys -t $server:0 Space Enter; tmux send-keys -t $server:0 'save'  Enter"
             	ssh untserver@"${hostname}" "\$HOME/$server stop" > /dev/null & 
             	serverpidstop["$server"]=$!; 
             done; 
