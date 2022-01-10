@@ -11,66 +11,109 @@
 
 source "$HOME"/script/servers.sh
 
-#Get args and usage
-if [[ $# -eq 0 ]]
-then
-	echo "[ERROR] Usage: $0 [SteamID] [Reason] [Period in days]"
-	exit 1
-elif [[ $# -eq 1 ]]
-then
-	steamid=$1
-	reason="No reason have been provided"
-	duration="Permanent"
-elif [[ $# -eq 2 ]]
-then
-	steamid=$1
-	reason=$2
-	duration="Permanent"
-elif [[ $# -eq 3 ]]
-then
-	steamid=$1
-	reason=$2
-	duration=$3
-fi
+discorddir="$HOME/discord/bans"
 
-#Check if the SteamID is correct
-if [[ ! $steamid =~ ^7656[0-9]{13}$ ]]
+if [[ $# -eq 0 || $# -gt 4 ]]
 then
-	echo "[ERROR] SteamID64 provided is not valid !"
-	exit 1
-fi
-
-#Check if the reason is a string
-if [[ ! $reason =~ [a-zA-Z] ]]
+        echo "[ERROR] Usage: $0 [SteamID] [Reason] [Period in days] [Server]"
+        exit 1
+elif [[ $# -ge 1 ]]
 then
-	echo "[ERROR] The reason provided is not a string !"
-	exit 1
-fi
+        #Check if the SteamID is correct
+    if [[ ! $1 =~ ^7656[0-9]{13}$ ]]
+    then
+            echo "[ERROR] SteamID64 provided is not valid !"
+            exit 1
+    else
+        steamid=$1
+            #Construct the command
+        command="ban $steamid"
+    fi
 
-#Check if the duration is a number and convert the given time in seconds
-if [[ ! $duration =~ ^[0-9]{1,}$ ]]
-then
-	echo "[ERROR] Duration entered is not a number !"
-	exit 1
-else
-    if [ ! $duration -ge 1 ] || [ ! $duration -le 365 ]
-	then
-		echo "[ERROR] Time entered is incorrect. Please use a duration between 1 and 365 days"
-		exit 1
-	fi
-	durationSecs=$((duration*86400))
-fi
+    if [[ $# -ge 2 ]]
+    then
+        if [[ ! $2 =~ [a-zA-Z] ]]
+        then
+                echo "[ERROR] The reason provided is not a string !"
+                exit 1
+            else
+                if [[ ! $2 == "No reason have been provided" ]]
+                then
+                        reason=$2
+                        #Construct the command
+                command="${command}/$reason"
+                fi
+            fi
 
+            if [[ $# -ge 3 ]]
+            then
+            if [[ ! $3 =~ ^[0-9]{1,}$ ]]
+            then
+                echo "[ERROR] Duration entered is not a number !"
+                    exit 1
+                elif [[ ! $3 -ge 1 ]] || [[ ! $3 -le 365 ]]
+                then
+                        echo "[ERROR] Time entered is incorrect. Please use a duration between 1 and 365 days"
+                        exit 1
+                    else
+                        duration=$3
+                        #Convert from days to seconds
+                    durationSecs=$((duration*86400))
+
+                    #Construct the command
+                    command="${command}/$durationSecs"
+            fi
+
+            if [[ $# -ge 4 ]]
+            then
+                if [[ ! $4 == "All" ]]
+                then
+                                for server in $serverslist
+                        do
+                                if [[ $4 == $server ]]
+                                then
+                                        targetVerified=1
+                                        break
+                                fi
+                        done
+
+                        if [[ ! targetVerified -eq 1 ]]
+                        then
+                            echo -e "[ERROR] Server name is incorrect ! Please select one in the list: $(echo $serverslist | tr -s '\n' ' ')"
+                                exit 1
+                        else
+                                targetServ=$4
+                                hostnameexec=$(echo $configcontent | tr -s ' ' '\n' | grep $targetServ | cut -d, -f2)
+                        fi
+                    else
+                        hostnameexec="All"
+                fi
+            fi #If 4 args
+            fi #If 3 args
+    fi #If 2 args
+fi #If 1 arg
+
+#Display what action will be performed
+echo ""
 echo "Player to ban: $steamid"
-echo "Reason: $reason"
-echo "Duration: $duration days or $durationSecs seconds"
+[[ -z "$reason" ]] || echo "Reason: $reason"
+[[ -z "$durationSecs" ]] || echo "Duration: $duration days or $durationSecs seconds"
+[[ -z "$targetServ" ]] || echo "Server: $targetServ"
+echo ""
+echo "Command: $command"
+[[ -z "$targetServ" ]] || echo "Server of execution: $hostnameexec"
 
-#Browsing node list
-#for hostname in $hostslist
-#do
-#    #Browsing servers for each node
-#    for server in ${hostservers["$(echo "$hostname" | cut -d. -f1)"]}
-#    do
-#        ssh untserver@"${hostname}" "tmux send-keys -t "$server":0 Space Enter; tmux send-keys -t "$server":0 'ban $steamid' Enter"
-#    done
-#done
+if [[ ! -z "$targetServ" ]]
+then
+        ssh untserver@"${hostnameexec}" "tmux send-keys -t "$targetServ":0 Space Enter; tmux send-keys -t "$targetServ":0 '$command' Enter"
+else
+    for hostname in $hostslist
+        do
+                for server in ${hostservers["$(echo "$hostname" | cut -d. -f1)"]}
+                do
+                        ssh untserver@"${hostname}" "tmux send-keys -t "$server":0 Space Enter; tmux send-keys -t "$server":0 '$command' Enter"
+                done
+        done
+fi
+
+#"$discorddir"/discord.sh --avatar "https://imgur.com/Ii4SoiK.png" --username "Pasta-Guardian" --color 0xFF0000 --image "https://imgur.com/gAJqceG.png" --title "Player $steamid is banned for $duration days" --url "  https://steamcommunity.com/profiles/$steamid" --timestamp
