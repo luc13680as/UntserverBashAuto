@@ -42,10 +42,18 @@ do
 
     #grep 'Connecting: PlayerID:' | sed 's/Connecting: PlayerID: //g'  | sed 's/ Name: /,/g' | sed 's/ Character: /,/g'
     playersInfos=$(cat "$f" | grep -a 'Connecting: PlayerID:' | cut -c 44- | sed -e "s/./\"/" | sed -e "s/ Name\: /\"\,\"/g" | sed -e "s/ Character: /\"\,\"/g" | sed -e "s/$/\"/")
+    echo "$playersInfos" > "$scriptdir/tempcsv.csv"
+    numbline=$(cat "$scriptdir/tempcsv.csv" | wc -l)
 
     mapfile -t steamNames < <(echo "$playersInfos" | csvcut -c2)
     mapfile -t unturnedNames < <(echo "$playersInfos" | csvcut -c3)
 
+    i=0
+    while [[ $i -le $(($numbline-1)) ]]
+    do
+    	echo "${unturnedNames[$i]} [${steamNames[$i]}]"
+    	i=$((i+1))
+    done
 
     #testfile=$scriptdir/players.csv
     #numbline=$(cat "$testfile" | wc -l)
