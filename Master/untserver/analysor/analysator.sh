@@ -4,7 +4,7 @@
 #                                                             #
 # Name: Analysator                                            #
 # Description: Analyse logs and extract informations          #
-# Version: 1.1                                                #
+# Version: 1.0                                                #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -14,19 +14,45 @@ scriptdir="${0%/*}"
 logscollecteddir=$scriptdir/collected
 logsprocesseddir=$scriptdir/processed
 
+#File processing
+tmpdir=$scriptdir/tmp
+formatedPlayerList=$tmpdir/tmpPlayersFound.csv
+formatedPlayerListSteamID=$tmpdir/tmpPlayersFoundSteamID.csv
+formatedPlayerListSteamIDonDatabase=$tmpdir/tmpPlayersFoundSteamIDonDatabase.csv
+formatedPlayerListSteamIDtoAdd=$tmpdir/tmpPlayersFoundSteamIDtoAdd.csv
+
+
 #MySQL Informations
-mysqlHost='localhost'
+mysqlHost=''
 mysqlUser=''
 mysqlPassword=''
+mysqlPort=''
 mysqlStatsDatabase=''
+mysqlTemplate="$scriptdir/databasecreation.sql"
 
-#Collected
+echo "Checking database connection !"
 
+#Check if the connection and the database exist
+#mysql -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "SHOW tables;"
+if ! mysql -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -e "USE $mysqlStatsDatabase;"
+then
+    echo "The database doesn't exist !"
+    exit 1
+fi
+
+#Check if required tables exist
+tablesExist=$(mysql -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "SHOW TABLES;" | grep stats)
+if [[ ! "$tablesExist" =~ "stats" ]]
+then
+    echo "Launching the creation of tables"
+    mysql -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" < "$mysqlTemplate"
+fi
 echo "Launching data analyse !"
 
 #Check directory
 [[ -d $logscollecteddir ]] || mkdir -p "$logscollecteddir"
 [[ -d $logsprocesseddir ]] || mkdir -p "$logsprocesseddir"
+[[ -d $tmpdir ]] || mkdir -p "$tmpdir"
 
 for f in "$logscollecteddir"/*.log
 do
@@ -38,34 +64,63 @@ do
 
     echo -e "Server: $fserver \nDate: $fdate"
 
-    echo "Retrieving players informations !" 
+    echo "Retrieving players list and informations !" 
 
-    #grep 'Connecting: PlayerID:' | sed 's/Connecting: PlayerID: //g'  | sed 's/ Name: /,/g' | sed 's/ Character: /,/g'
-    playersInfos=$(cat "$f" | grep -a 'Connecting: PlayerID:' | cut -c 44- | sed -e "s/./\"/" | sed -e "s/ Name\: /\"\,\"/g" | sed -e "s/ Character: /\"\,\"/g" | sed -e "s/$/\"/")
-    echo "$playersInfos" > "$scriptdir/tempcsv.csv"
-    numbline=$(cat "$scriptdir/tempcsv.csv" | wc -l)
+    #grep 'Connecting: PlayerID:' | sed 's/Connecting: PlayerID: //g'  | sed 's/ Name: /,/g' | sed 's/ Character: /,/g' 
+    # csvsort -c
+    playersInfos=$(cat "$f" | grep -a 'Connecting: PlayerID:' | cut -c 44- | sed -e "s/./\"/" | sed -e "s/ Name\: /\"\,\"/g" | sed -e "s/ Character: /\"\,\"/g" | sed -e "s/$/\"/" | csvsort -H -c 1,2,3 | uniq | csvformat -U 2)
+    echo "$playersInfos" > "$formatedPlayerList"
 
-    mapfile -t steamNames < <(echo "$playersInfos" | csvcut -c2)
-    mapfile -t unturnedNames < <(echo "$playersInfos" | csvcut -c3)
+    #Checking if players have been found
+    if [[ ! -z "$playersInfos" ]]
+    then
+        echo "Found $(echo "$playersInfos" | wc -l) players !"
+    else
+        echo "No players have been found !"
 
-    i=0
-    while [[ $i -le $(($numbline-1)) ]]
+        echo "No statistics will be calculated for this file"
+
+        continue
+    fi
+
+    echo "Checking players existence in the database !"
+
+    cat "$formatedPlayerList" | csvcut -c1 | sort | uniq > "$formatedPlayerListSteamID"
+
+    playerExistenceRequest="SELECT steamid FROM stats_players WHERE "
+    while IFS= read -r playerSteamID
     do
-    	echo "${unturnedNames[$i]} [${steamNames[$i]}]"
-    	i=$((i+1))
-    done
+        playerExistenceRequest+="steamid = $playerSteamID OR "
+    done < "$formatedPlayerListSteamID"
 
-    #testfile=$scriptdir/players.csv
-    #numbline=$(cat "$testfile" | wc -l)
-    #mapfile -t steamNames < <(csvcut -c2 "$testfile")
-    #mapfile -t unturnedNames < <(csvcut -c3 "$testfile")
+    playerExistenceRequest=$(echo "$playerExistenceRequest" | sed 's/ OR $/\;/')
 
-    #i=0
-    #while [[ $i -le $(($numbline-1)) ]]
-    #do
-    #	echo "${unturnedNames[$i]} [${steamNames[$i]}]"
-    #	i=$((i+1))
-    #done
+    mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$playerExistenceRequest" -N | sort > "$formatedPlayerListSteamIDonDatabase"
 
-	exit 0 
+    grep -vxFf "$formatedPlayerListSteamIDonDatabase" "$formatedPlayerListSteamID" > "$formatedPlayerListSteamIDtoAdd"
+
+    if [[ $(cat "$formatedPlayerListSteamIDtoAdd" | wc -l) -gt 0 ]]
+    then
+    	echo "$(cat "$formatedPlayerListSteamIDtoAdd" | wc -l) players needs to be added in the database"
+    	addPlayerRequest="INSERT INTO \`stats_players\` (\`steamid\`) VALUES"
+        while IFS= read -r SteamIDtoAdd
+        do
+        	addPlayerRequest+=" ($SteamIDtoAdd),"
+        done < "$formatedPlayerListSteamIDtoAdd"
+
+        addPlayerRequest=$(echo "$addPlayerRequest" | sed 's/,$/;/')
+
+        mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$addPlayerRequest" -N
+
+        echo "Done !"
+    else
+    	echo "All players are already in the database !"
+    fi
+
+    #exit 0 
+
+    if [[ "$fserver" == "pastanetwork3" ]]
+    then
+    	exit 0
+    fi
 done
