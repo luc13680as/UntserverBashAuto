@@ -9,6 +9,9 @@
 #                                                             #
 ###############################################################
 
+#Gathering servers data
+source "$HOME"/script/servers.sh
+
 #Local informations
 scriptdir="${0%/*}"
 logscollecteddir=$scriptdir/collected
@@ -16,6 +19,11 @@ logsprocesseddir=$scriptdir/processed
 
 #File processing
 tmpdir=$scriptdir/tmp
+##Servers processing
+serverslistFile=$tmpdir/serverslist.csv
+serverslistDB=$tmpdir/serverslistDB.csv
+serverslistToAdd=$tmpdir/serverslistToAdd.csv
+##Players processing
 formatedPlayerList=$tmpdir/tmpPlayersFound.csv
 formatedPlayerListSteamID=$tmpdir/tmpPlayersFoundSteamID.csv
 formatedPlayerListSteamIDonDatabase=$tmpdir/tmpPlayersFoundSteamIDonDatabase.csv
@@ -47,12 +55,57 @@ then
     echo "Launching the creation of tables"
     mysql -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" < "$mysqlTemplate"
 fi
-echo "Launching data analyse !"
 
 #Check directory
 [[ -d $logscollecteddir ]] || mkdir -p "$logscollecteddir"
 [[ -d $logsprocesseddir ]] || mkdir -p "$logsprocesseddir"
 [[ -d $tmpdir ]] || mkdir -p "$tmpdir"
+
+#Checking if servers exist in the database
+echo "Checking if servers exists in the database"
+
+if [[ ! -z "$serverslist" ]]
+then
+	echo "$serverslist" | sort > "$serverslistFile"
+else
+	echo "No servers have been found !! - Please check your configuration file"
+	exit 1
+fi
+
+checkServersRequest="SELECT server FROM stats_servers WHERE "
+while IFS= read -r serversToCheck
+do
+    checkServersRequest+="server = '$serversToCheck' OR "
+done < "$serverslistFile"
+checkServersRequest=$(echo "$checkServersRequest" | sed 's/ OR $/\;/')
+echo "$checkServersRequest"
+mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$checkServersRequest" -N | sort > "$serverslistDB"
+
+grep -vxFf "$serverslistDB" "$serverslistFile" > "$serverslistToAdd"
+
+if [[ $(cat "$serverslistToAdd" | wc -l) -gt 0 ]]
+    then
+    	echo "$(cat "$serverslistToAdd" | wc -l) servers needs to be added in the database"
+    	addServerRequest="INSERT INTO \`stats_servers\` (\`server\`) VALUES"
+        while IFS= read -r SrvtoAdd
+        do
+        	addServerRequest+=" ('$SrvtoAdd'),"
+        done < "$serverslistToAdd"
+
+        addServerRequest=$(echo "$addServerRequest" | sed 's/,$/;/')
+
+        mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$addServerRequest" -N
+
+        echo "$addServerRequest"
+
+        echo "Servers added to the database !"
+    else
+    	echo "All servers are already in the database !"
+    fi
+
+#exit 0
+
+echo "Launching data analyse !"
 
 for f in "$logscollecteddir"/*.log
 do
@@ -66,33 +119,35 @@ do
 
     echo "Retrieving players list and informations !" 
 
-    #grep 'Connecting: PlayerID:' | sed 's/Connecting: PlayerID: //g'  | sed 's/ Name: /,/g' | sed 's/ Character: /,/g' 
-    # csvsort -c
-    playersInfos=$(cat "$f" | grep -a 'Connecting: PlayerID:' | cut -c 44- | sed -e "s/./\"/" | sed -e "s/ Name\: /\"\,\"/g" | sed -e "s/ Character: /\"\,\"/g" | sed -e "s/$/\"/" | csvsort -H -c 1,2,3 | uniq | csvformat -U 2)
-    echo "$playersInfos" > "$formatedPlayerList"
+    #Transform data collected into a csv format
+    playersInfos=$(cat "$f" | grep -a 'Connecting: PlayerID:' | cut -c 44- | sed -e "s/./\"/" | sed -e "s/ Name\: /\"\,\"/g" | sed -e "s/ Character: /\"\,\"/g" | sed -e "s/$/\"/")
 
-    #Checking if players have been found
+    #Checking if characters have been found before formatting results into a file
     if [[ ! -z "$playersInfos" ]]
     then
-        echo "Found $(echo "$playersInfos" | wc -l) players !"
+        echo "Found $(echo "$playersInfos" | wc -l) characters !"
     else
-        echo "No players have been found !"
+        echo "No characters have been found !"
 
         echo "No statistics will be calculated for this file"
 
         continue
     fi
 
+    #Convert csv file into something exploitable
+    #csvkit need a header in order to not throw some errors, so let's give it some.
+    #Ensure that any couple steamid-SteamName-Character is unique
+    echo "$playersInfos" | csvsort -H -c 1,2,3 | uniq | csvformat -U 2 > "$formatedPlayerList"
+
     echo "Checking players existence in the database !"
 
-    cat "$formatedPlayerList" | csvcut -c1 | sort | uniq > "$formatedPlayerListSteamID"
+    cat "$formatedPlayerList" | csvcut -c1 | sed '1d' | sort | uniq > "$formatedPlayerListSteamID"
 
     playerExistenceRequest="SELECT steamid FROM stats_players WHERE "
     while IFS= read -r playerSteamID
     do
         playerExistenceRequest+="steamid = $playerSteamID OR "
     done < "$formatedPlayerListSteamID"
-
     playerExistenceRequest=$(echo "$playerExistenceRequest" | sed 's/ OR $/\;/')
 
     mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$playerExistenceRequest" -N | sort > "$formatedPlayerListSteamIDonDatabase"
@@ -112,14 +167,14 @@ do
 
         mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$addPlayerRequest" -N
 
-        echo "Done !"
+        echo "Players added to the database !"
     else
     	echo "All players are already in the database !"
     fi
 
     #exit 0 
 
-    if [[ "$fserver" == "pastanetwork3" ]]
+    if [[ "$fserver" == "pastanetwork10" ]]
     then
     	exit 0
     fi
