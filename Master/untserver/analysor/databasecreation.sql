@@ -44,5 +44,6 @@ killpunch SMALLINT DEFAULT 0,
 killroadkill SMALLINT DEFAULT 0,
 killblownup SMALLINT DEFAULT 0,
 FOREIGN KEY (steamid_id) REFERENCES stats_players(id) ON DELETE CASCADE,
-FOREIGN KEY (server_id) REFERENCES stats_servers(id) ON DELETE CASCADE
+FOREIGN KEY (server_id) REFERENCES stats_servers(id) ON DELETE CASCADE,
+CONSTRAINT CT_PlayerServer UNIQUE (steamid_id,server_id)
 );
