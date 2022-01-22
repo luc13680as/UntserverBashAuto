@@ -29,6 +29,12 @@ formatedPlayerListSteamID=$tmpdir/tmpPlayersFoundSteamID.csv
 formatedPlayerListSteamIDonDatabase=$tmpdir/tmpPlayersFoundSteamIDonDatabase.csv
 formatedPlayerListSteamIDtoAdd=$tmpdir/tmpPlayersFoundSteamIDtoAdd.csv
 
+formatedPlayerListIDonDatabase=$tmpdir/tmpPlayersFoundIDonDatabase.csv
+formatedPlayerListIDonStatsDB=$tmpdir/tmpPlayersFoundIDPlayersDB.csv
+formatedPlayerListIDonStatsToAdd=$tmpdir/tmpPlayersFoundIDonStatsToAdd.csv
+##Unturned Format
+tmpPlayersUntFormat=$tmpdir/tmpPlayersUnt.csv
+
 #MySQL Informations
 mysqlHost=''
 mysqlUser=''
@@ -40,7 +46,6 @@ mysqlTemplate="$scriptdir/databasecreation.sql"
 echo "Checking database connection !"
 
 #Check if the connection and the database exist
-#mysql -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "SHOW tables;"
 if ! mysql -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -e "USE $mysqlStatsDatabase;"
 then
     echo "The database doesn't exist !"
@@ -64,18 +69,17 @@ fi
 echo "Checking if servers exists in the database"
 if [[ ! -z "$serverslist" ]]
 then
+	#Save servers in a file to iterate through it
 	echo "$serverslist" | sort > "$serverslistFile"
 
-	#Check if servers are present in the database
-	#Crafting the request
+	#Craft the request to check if servers are present in the database
     checkServersRequest="SELECT server FROM stats_servers WHERE "
     while IFS= read -r serversToCheck
     do
         checkServersRequest+="server = '$serversToCheck' OR "
     done < "$serverslistFile"
     checkServersRequest=$(echo "$checkServersRequest" | sed 's/ OR $/\;/')
-
-    #Sending the request and collect results
+    #Sending the request and collect results and save it
     mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$checkServersRequest" -N | sort > "$serverslistDB"
 
     #Getting servers that needs to be added
@@ -117,12 +121,10 @@ do
 	fdate=$(echo "$f" | grep -oP "[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
     echo -e "Server: $fserver \nDate: $fdate"
-
     echo "Retrieving players list and informations !" 
 
     #Transform data collected into a csv format
     playersInfos=$(cat "$f" | grep -a 'Connecting: PlayerID:' | cut -c 44- | sed -e "s/./\"/" | sed -e "s/ Name\: /\"\,\"/g" | sed -e "s/ Character: /\"\,\"/g" | sed -e "s/$/\"/")
-
     #Checking if characters have been found before formatting results into a file
     if [[ ! -z "$playersInfos" ]]
     then
@@ -133,29 +135,27 @@ do
         continue
     fi
 
+    echo "Checking players existence in the database !"
+
     #Convert csv file into something exploitable
     #csvkit need a header in order to not throw some errors, so let's give it some.
     #Ensure that any couple steamid-SteamName-Character is unique
     echo "$playersInfos" | csvsort -H -c 1,2,3 | uniq | csvformat -U 2 > "$formatedPlayerList"
-
-    echo "Checking players existence in the database !"
-
     cat "$formatedPlayerList" | csvcut -c1 | sed '1d' | sort | uniq > "$formatedPlayerListSteamID"
 
     #Crafting request and send it
-    playerExistenceRequest="SELECT steamid FROM stats_players WHERE "
+    playerExistenceRequest="SELECT id,steamid FROM stats_players WHERE "
     while IFS= read -r playerSteamID
     do
         playerExistenceRequest+="steamid = $playerSteamID OR "
     done < "$formatedPlayerListSteamID"
     playerExistenceRequest=$(echo "$playerExistenceRequest" | sed 's/ OR $/\;/')
-
     #Sending the request and collect results
-    mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$playerExistenceRequest" -N | sort > "$formatedPlayerListSteamIDonDatabase"
-
-    #Getting players that needs to be added
+    mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$playerExistenceRequest" -N | cut -f2 | sort > "$formatedPlayerListSteamIDonDatabase"
+    #Getting the list of players that needs to be added
     grep -vxFf "$formatedPlayerListSteamIDonDatabase" "$formatedPlayerListSteamID" > "$formatedPlayerListSteamIDtoAdd"
 
+    #Craft a request to add the list of players if it's needed
     if [[ $(cat "$formatedPlayerListSteamIDtoAdd" | wc -l) -gt 0 ]]
     then
     	echo "$(cat "$formatedPlayerListSteamIDtoAdd" | wc -l) players needs to be added in the database"
@@ -174,7 +174,58 @@ do
     	echo "All players are already in the database !"
     fi
 
+    #Adding players to the statistics table if it's needed
+    #Retrieving ID players in the player table
+    mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$playerExistenceRequest" -N | cut -f1 > "$formatedPlayerListIDonDatabase"
+    
+    #Retrieving ID servers in the server table
+    serverID=$(mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "SELECT id FROM stats_servers WHERE server = '$fserver';" -N)
+
+    #Retrieving ID players in the statistics table
+    requestPlayerStatsListID="SELECT steamid_id FROM stats_statistics WHERE server_id = $serverID AND ("
+    while IFS= read -r playersID
+    do
+    	requestPlayerStatsListID+="steamid_id = $playersID OR "
+    done < "$formatedPlayerListIDonDatabase"
+    requestPlayerStatsListID=$(echo "$requestPlayerStatsListID"")" | sed 's/ OR )$/)\;/')
+    #Save IDs to a file
+    mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$requestPlayerStatsListID" -N > "$formatedPlayerListIDonStatsDB"
+    
+    #Determine which players needs to be added in the database
+    grep -vxFf "$formatedPlayerListIDonStatsDB" "$formatedPlayerListIDonDatabase" > "$formatedPlayerListIDonStatsToAdd"
+
+    #Add players in the statistics database
+    if [[ $(cat "$formatedPlayerListIDonStatsToAdd" | wc -l) -gt 0 ]]
+    then
+    	#Crafting request and send it
+    	addStatsPlayerRequest="INSERT INTO stats_statistics (steamid_id,server_id) VALUES"
+        while IFS= read -r IDSteamIDtoAdd
+        do
+        	addStatsPlayerRequest+=" ($IDSteamIDtoAdd,$serverID),"
+        done < "$formatedPlayerListIDonStatsToAdd"
+        addStatsPlayerRequest=$(echo "$addStatsPlayerRequest" | sed 's/,$/;/')
+        mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$addStatsPlayerRequest" -N
+    fi
+
+    #Add a new column with unturned format
+    mapfile -t formatedPlayerListSTMnme < <(cat "$formatedPlayerList" | csvcut -c 2)
+    mapfile -t formatedPlayerListUNTnme < <(cat "$formatedPlayerList" | csvcut -c 3)
+    nmbPlr=$(cat "$formatedPlayerList" | wc -l)
+    i=0
+    while [[ "$i" -le $((nmbPlr-1)) ]]
+    do
+        echo "\"${formatedPlayerListUNTnme[$i]} [${formatedPlayerListSTMnme[$i]}]\"" >> "$tmpPlayersUntFormat"
+        i=$((i+1))
+    done
+    paste -d',' "$formatedPlayerList" "$tmpPlayersUntFormat" | sed '1d' > "$formatedPlayerList"
+
+    #Récupération des messages de mort avec les regex (Piquer le code de sortor) + nom du joueur
+    #Faire un tableau ["steamid"]="Nom Unturned" 
+    #Faire toutes les bonnes requêtes pour la table de stats
+
     #exit 0 
+    echo "========"
+
     if [[ "$fserver" == "pastanetwork10" ]]
     then
     	exit 0
