@@ -28,12 +28,43 @@ formatedPlayerList=$tmpdir/tmpPlayersFound.csv
 formatedPlayerListSteamID=$tmpdir/tmpPlayersFoundSteamID.csv
 formatedPlayerListSteamIDonDatabase=$tmpdir/tmpPlayersFoundSteamIDonDatabase.csv
 formatedPlayerListSteamIDtoAdd=$tmpdir/tmpPlayersFoundSteamIDtoAdd.csv
-
 formatedPlayerListIDonDatabase=$tmpdir/tmpPlayersFoundIDonDatabase.csv
 formatedPlayerListIDonStatsDB=$tmpdir/tmpPlayersFoundIDPlayersDB.csv
 formatedPlayerListIDonStatsToAdd=$tmpdir/tmpPlayersFoundIDonStatsToAdd.csv
 ##Unturned Format
 tmpPlayersUntFormat=$tmpdir/tmpPlayersUnt.csv
+##Messages Processing
+declare -A deathRegex
+deathRegex["bleeding"]='.{1,} bled to death!'
+deathRegex["bones"]='.{1,} fractured to death!'
+deathRegex["freezing"]='.{1,} froze to death!'
+deathRegex["burning"]='.{1,} burned to death!'
+deathRegex["food"]='.{1,} starved to death!'
+deathRegex["water"]='.{1,} dehydrated to death!'
+deathRegex["zombie"]='.{1,} was mauled by a zombie!'
+deathRegex["animal"]='.{1,} was mauled by an animal!'
+deathRegex["suicide"]='.{1,} killed themself.'
+deathRegex["infection"]='.{1,} was infected to death!'
+deathRegex["breath"]='.{1,} suffocated to death!'
+deathRegex["vehicle"]='.{1,} was blown up by a vehicle!'
+deathRegex["shred"]='.{1,} was shredded to bits!'
+deathRegex["landmine"]='.{1,} was blown up by a landmine!'
+deathRegex["sentry"]='.{1,} was shot by a sentry gun!'
+deathRegex["acid"]='.{1,} was blown up by a zombie!'
+deathRegex["boulder"]='.{1,} was crushed by a zombie!'
+deathRegex["burner"]='.{1,} was burned by a zombie!'
+deathRegex["spit"]='.{1,} was dissolved by a zombie!'
+deathRegex["spark"]='.{1,} was electrocuted by a zombie!'
+deathRegex["deathgun"]='.{1,} was shot in the (?:leg|arm|torso|head) by '
+deathRegex["deathmelee"]='.{1,} was chopped in the (?:leg|arm|torso|head) by '
+deathRegex["deathpunch"]='.{1,} was punched in the (?:leg|arm|torso|head) by '
+deathRegex["deathroadkill"]='.{1,} was roadkilled by '
+deathRegex["deathblownup"]='.{1,} was blown up by .{1,} with (?:a|an) (?:grenade|missile|remote detonator|explosive bullet)!'
+deathRegex["killgun"]='was shot in the (?:leg|arm|torso|head) by .{1,}'
+deathRegex["killmelee"]='was chopped in the (?:leg|arm|torso|head) by .{1,}'
+deathRegex["killpunch"]='was punched in the (?:leg|arm|torso|head) by .{1,}'
+deathRegex["killroadkill"]='was roadkilled by .{1,}'
+deathRegex["killblownup"]='was blown up by .{1,} with (?:a|an) (?:grenade|missile|remote detonator|explosive bullet)!'
 
 #MySQL Informations
 mysqlHost=''
@@ -212,18 +243,51 @@ do
     mapfile -t formatedPlayerListUNTnme < <(cat "$formatedPlayerList" | csvcut -c 3)
     nmbPlr=$(cat "$formatedPlayerList" | wc -l)
     i=0
+    rm "$tmpPlayersUntFormat"
     while [[ "$i" -le $((nmbPlr-1)) ]]
     do
         echo "\"${formatedPlayerListUNTnme[$i]} [${formatedPlayerListSTMnme[$i]}]\"" >> "$tmpPlayersUntFormat"
         i=$((i+1))
     done
-    paste -d',' "$formatedPlayerList" "$tmpPlayersUntFormat" | sed '1d' > "$formatedPlayerList"
 
-    #Récupération des messages de mort avec les regex (Piquer le code de sortor) + nom du joueur
-    #Faire un tableau ["steamid"]="Nom Unturned" 
-    #Faire toutes les bonnes requêtes pour la table de stats
+    paste -d',' "$formatedPlayerList" "$tmpPlayersUntFormat" > ./tmp/tmpCopyPaste.csv
+    cat ./tmp/tmpCopyPaste.csv > "$formatedPlayerList"
+    rm ./tmp/tmpCopyPaste.csv
+    
+    echo "Scanning file for deaths and kills."
 
-    #exit 0 
+    #Scan l'entièreté du fichier avec les différentes Regex et grep -o pour avoir seulement la bonne partie
+    # + Sauvegarder les résultats par type
+    totalDeathInFile=0
+    declare -A deathMessage
+    for typeOfDeath in "${!deathRegex[@]}"
+    do
+    	#echo "Variable: $typeOfDeath"
+    	deathMessage["$typeOfDeath"]=$(cat $f | cut -c 23- | grep -Po "${deathRegex[$typeOfDeath]}")
+
+    	if [[ -z "${deathMessage[$typeOfDeath]}" ]]
+    	then
+    		#echo "No death message of type $typeOfDeath have been found"
+    		unset deathMessage["$typeOfDeath"]
+    	else
+    		totalDeathInFile=$((totalDeathInFile + $(echo "${deathMessage[$typeOfDeath]}" | wc -l)))
+    		#echo "Found $(echo "${deathMessage[$typeOfDeath]}" | wc -l) deaths for the type $typeOfDeath !"
+    	fi
+    done
+    echo "Found a total of $totalDeathInFile deaths and kills"
+
+    #Faire un tableau avec le joueur avec clé steamid et nom player 
+    cat "$formatedPlayerList" | csvcut -c 1,4
+
+    #Boucler les joueurs sur les différents résultats et construire la requête unique à envoyer au serveur
+
+    #Retirer les résultats au fur et à mesure histoire d'accélérer la boucle ? 
+    #Si le type est vide, le retirer complètement
+
+
+    
+
+    exit 0 
     echo "========"
 
     if [[ "$fserver" == "pastanetwork10" ]]
