@@ -145,6 +145,7 @@ echo "==================================="
 #Scan every logs file
 for f in "$logscollecteddir"/*.log
 do
+	#f="./collected/pastanetwork1-2021-04-14-05-00.log"
 	echo "Scanning $f..."
 
 	#Retrieving date and server 
@@ -263,7 +264,7 @@ do
     for typeOfDeath in "${!deathRegex[@]}"
     do
     	#echo "Variable: $typeOfDeath"
-    	deathMessage["$typeOfDeath"]=$(cat $f | cut -c 23- | grep -Po "${deathRegex[$typeOfDeath]}")
+    	deathMessage["$typeOfDeath"]=$(cat $f | cut -c 23- | grep -Pao "${deathRegex[$typeOfDeath]}")
 
     	if [[ -z "${deathMessage[$typeOfDeath]}" ]]
     	then
@@ -274,20 +275,54 @@ do
     		#echo "Found $(echo "${deathMessage[$typeOfDeath]}" | wc -l) deaths for the type $typeOfDeath !"
     	fi
     done
-    echo "Found a total of $totalDeathInFile deaths and kills"
+    echo "Found a total of $totalDeathInFile deaths and kills:"
+    echo "${deathMessage[@]}"
+    echo ""
+
+    #Boucler sur chaque type de mort
+     #Boucler sur chaque nom de joueur + steamid
+      #Stocker le steamid et le nom dans deux variables temporaires
+      #Lancer la RegEx et compter le nombre de fois que ça match
+      #Ajouter dans la requête
+    #Lancer la requête
+
+    #https://www.tutorialspoint.com/mysql-mass-update-with-case-when-then-else
+
+    for typeOfDeathFilled in "${!deathMessage[@]}"
+    do
+    	echo "====="
+        echo "Type of death: $typeOfDeathFilled"
+
+        #echo "${deathMessage[$typeOfDeathFilled]}"
+
+        echo "-----"
+
+        while IFS= read -r playersLine
+        do
+        	playersLineUntFormat=$(echo "$playersLine" | cut -c19-)
+
+            if [[ $typeOfDeathFilled == "deathblownup" ]]
+        	then
+        		playerNumberOfKill="$(echo "${deathMessage[$typeOfDeathFilled]}" | grep -aF -- "$(echo "${deathRegex[$typeOfDeathFilled]}" | sed 's/.{1,}/'"$playersLineUntFormat"'/' | sed 's/was blown up by.*/was blown up/')" | wc -l)"
+        	else
+          		playerNumberOfKill="$(echo "${deathMessage[$typeOfDeathFilled]}" | grep -aF -- "$playersLineUntFormat" | wc -l)"
+        	fi
+
+        	if [[ "$playerNumberOfKill" -ge 1 ]]
+        	then
+        		playersLineSteamID=$(echo "$playersLine" | cut -d, -f1)
+        		echo "Player: $playersLineUntFormat - SteamID: $playersLineSteamID - Number of occurrences: $playerNumberOfKill"
+        	fi
+        	#exit 0
+        done < <(cat "$formatedPlayerList" | csvcut -c 1,4 | sed '1d')
+        #exit 0
+    done
+
 
     #Faire un tableau avec le joueur avec clé steamid et nom player 
-    cat "$formatedPlayerList" | csvcut -c 1,4
+    #cat "$formatedPlayerList" | csvcut -c 1,4 | sed '1d'
 
-    #Boucler les joueurs sur les différents résultats et construire la requête unique à envoyer au serveur
-
-    #Retirer les résultats au fur et à mesure histoire d'accélérer la boucle ? 
-    #Si le type est vide, le retirer complètement
-
-
-    
-
-    exit 0 
+    #exit 0 
     echo "========"
 
     if [[ "$fserver" == "pastanetwork10" ]]
