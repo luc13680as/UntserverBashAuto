@@ -4,7 +4,7 @@
 #                                                             #
 # Name: DailyMaster                                           #
 # Description: Execute the daily routine on other hosts       #
-# Version: 1.4                                                #
+# Version: 1.5                                                #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -22,7 +22,7 @@ discorddir="$HOME/discord/alert"
 
 #Cloud backup with rclone
 rcloneremotename="pastaremote"
-rclonebucketname="Pastanetwork-Unturned-Dev"
+rclonebucketname="Pastanetwork-Unturned-Prod"
 
 #Verifying if everything is here
 [[ -d $serverbackupdir ]] || mkdir -p "$serverbackupdir"
@@ -33,6 +33,8 @@ echo -e "Sending discord notification"
 
 #Send that the network is restarting
 "$discorddir"/discord.sh --avatar "https://imgur.com/Ii4SoiK.png" --username "Pasta-Bot" --color 0xFFAA00 --image "https://imgur.com/gAJqceG.png"
+
+./dailyanalysis.sh
 
 echo -e "Warning players of the restart !" 
 
@@ -77,7 +79,7 @@ do
             for server in ${hostservers["$hostnametrunc"]}; 
             do
             	echo "Stoping server $server"
-		ssh untserver@"${hostname}" "tmux send-keys -t $server:0 Space Enter; tmux send-keys -t $server:0 'save'  Enter"
+                ssh untserver@"${hostname}" "tmux send-keys -t $server:0 Space Enter; tmux send-keys -t $server:0 'save'  Enter"
             	ssh untserver@"${hostname}" "\$HOME/$server stop" > /dev/null & 
             	serverpidstop["$server"]=$!; 
             done; 
