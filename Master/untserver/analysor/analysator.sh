@@ -13,7 +13,7 @@
 source "$HOME"/script/servers.sh
 
 #Local informations
-scriptdir="${0%/*}"
+scriptdir=${0%/*}
 logscollecteddir=$scriptdir/collected
 logsprocesseddir=$scriptdir/processed
 
