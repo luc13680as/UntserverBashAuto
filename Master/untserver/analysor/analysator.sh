@@ -4,7 +4,7 @@
 #                                                             #
 # Name: Analysator                                            #
 # Description: Analyse logs and extract informations          #
-# Version: 1.0                                                #
+# Version: 1.0.2                                              #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -149,7 +149,7 @@ do
 	echo "Scanning $f..."
 
 	#Retrieving date and server 
-	fserver=$(echo "$f" | grep -oP "pastanetwork(?:|[0-9])-" | tr -d '-')
+	fserver=$(echo "$f" | grep -oP "pastanetwork(?:|[0-9]{1,})-" | tr -d '-')
 	fdate=$(echo "$f" | grep -oP "[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
     echo -e "Server: $fserver \nDate: $fdate"
