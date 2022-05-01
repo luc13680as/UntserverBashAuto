@@ -325,8 +325,4 @@ do
     #exit 0 
     echo "========"
 
-    if [[ "$fserver" == "pastanetwork10" ]]
-    then
-    	exit 0
-    fi
 done
