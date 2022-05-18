@@ -4,7 +4,7 @@
 #                                                             #
 # Name: Analysator                                            #
 # Description: Analyse logs and extract informations          #
-# Version: 1.0.2                                              #
+# Version: 1.2                                                #
 # Creator: luc13680as                                         #
 #                                                             #
 ###############################################################
@@ -73,6 +73,11 @@ mysqlPassword=''
 mysqlPort=''
 mysqlStatsDatabase=''
 mysqlTemplate="$scriptdir/databasecreation.sql"
+
+#Discord info
+discordNumberFile="0"
+discordWebhook="https://discord.com/api/webhooks/822581293526417419/QeolCIgDskB4TIJpsTNGAGFlLDK_hBZHkP11L46zLmqgKTEahips6kWnmJrXD1YZT1-x"
+discordTimeLaunched=$(date +%s)
 
 echo "Checking database connection !"
 
@@ -145,6 +150,8 @@ echo "==================================="
 #Scan every logs file
 for f in "$logscollecteddir"/*.log
 do
+	discordNumberFile=$((discordNumberFile+1))
+
 	#f="./collected/pastanetwork1-2021-04-14-05-00.log"
 	echo "Scanning $f..."
 
@@ -164,6 +171,8 @@ do
     else
         echo "No characters have been found !"
         echo "No statistics will be calculated for this file"
+        echo "Moving file to the processed folder"
+        mv "$f" "${logsprocesseddir}/"
         continue
     fi
 
@@ -239,7 +248,7 @@ do
         mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$addStatsPlayerRequest" -N
     fi
 
-    #Add a new column with unturned format
+    #Add a new column with unturned format CharacterName [SteamName] to match game messages
     mapfile -t formatedPlayerListSTMnme < <(cat "$formatedPlayerList" | csvcut -c 2)
     mapfile -t formatedPlayerListUNTnme < <(cat "$formatedPlayerList" | csvcut -c 3)
     nmbPlr=$(cat "$formatedPlayerList" | wc -l)
@@ -275,54 +284,90 @@ do
     		#echo "Found $(echo "${deathMessage[$typeOfDeath]}" | wc -l) deaths for the type $typeOfDeath !"
     	fi
     done
-    echo "Found a total of $totalDeathInFile deaths and kills:"
-    echo "${deathMessage[@]}"
-    echo ""
 
-    #Boucler sur chaque type de mort
-     #Boucler sur chaque nom de joueur + steamid
-      #Stocker le steamid et le nom dans deux variables temporaires
-      #Lancer la RegEx et compter le nombre de fois que ça match
-      #Ajouter dans la requête
-    #Lancer la requête
+    if [[ ! "$totalDeathInFile" -eq 0 ]]
+    then
 
-    #https://www.tutorialspoint.com/mysql-mass-update-with-case-when-then-else
+    	#Boucler sur chaque type de mort
+     	 #Boucler sur chaque nom de joueur + steamid
+      	  #Stocker le steamid et le nom dans deux variables temporaires
+      	  #Lancer la RegEx et compter le nombre de fois que ça match
+      	  #Ajouter dans la requête
+    	 #Lancer la requête
 
-    for typeOfDeathFilled in "${!deathMessage[@]}"
-    do
-    	echo "====="
-        echo "Type of death: $typeOfDeathFilled"
+    	#https://www.tutorialspoint.com/mysql-mass-update-with-case-when-then-else
 
-        #echo "${deathMessage[$typeOfDeathFilled]}"
+        echo "Found a total of $totalDeathInFile deaths and kills:"
+        echo "${deathMessage[@]}"
+        echo ""
 
-        echo "-----"
+        invarUpdateKDRequest="UPDATE \`stats_statistics\` JOIN \`stats_players\` ON stats_statistics.steamid_id = stats_players.id JOIN \`stats_servers\` ON stats_statistics.server_id = stats_servers.id"
 
-        while IFS= read -r playersLine
+        for typeOfDeathFilled in "${!deathMessage[@]}"
         do
-        	playersLineUntFormat=$(echo "$playersLine" | cut -c19-)
+        	echo "====="
+            echo "Type of death: $typeOfDeathFilled"
+            #echo "${deathMessage[$typeOfDeathFilled]}"
+            echo "-----"
 
-            if [[ $typeOfDeathFilled == "deathblownup" ]]
-        	then
-        		playerNumberOfKill="$(echo "${deathMessage[$typeOfDeathFilled]}" | grep -aF -- "$(echo "${deathRegex[$typeOfDeathFilled]}" | sed 's/.{1,}/'"$playersLineUntFormat"'/' | sed 's/was blown up by.*/was blown up/')" | wc -l)"
-        	else
-          		playerNumberOfKill="$(echo "${deathMessage[$typeOfDeathFilled]}" | grep -aF -- "$playersLineUntFormat" | wc -l)"
-        	fi
+            while IFS= read -r playersLine
+            do
+            	playersLineUntFormat=$(echo "$playersLine" | cut -c19-)
 
-        	if [[ "$playerNumberOfKill" -ge 1 ]]
-        	then
-        		playersLineSteamID=$(echo "$playersLine" | cut -d, -f1)
-        		echo "Player: $playersLineUntFormat - SteamID: $playersLineSteamID - Number of occurrences: $playerNumberOfKill"
-        	fi
-        	#exit 0
-        done < <(cat "$formatedPlayerList" | csvcut -c 1,4 | sed '1d')
-        #exit 0
-    done
+                if [[ $typeOfDeathFilled == "deathblownup" ]]
+            	then
+            		playerNumberOfKill="$(echo "${deathMessage[$typeOfDeathFilled]}" | grep -aF -- "$(echo "${deathRegex[$typeOfDeathFilled]}" | sed 's/.{1,}/'"$playersLineUntFormat"'/' | sed 's/was blown up by.*/was blown up/')" | wc -l)"
+            	else
+              		playerNumberOfKill="$(echo "${deathMessage[$typeOfDeathFilled]}" | grep -aF -- "$playersLineUntFormat" | wc -l)"
+            	fi
 
+            	if [[ "$playerNumberOfKill" -ge 1 ]]
+            	then
+            		playersLineSteamID=$(echo "$playersLine" | cut -d, -f1)
+            		echo "Player: $playersLineUntFormat - SteamID: $playersLineSteamID - Number of occurrences: $playerNumberOfKill"
 
-    #Faire un tableau avec le joueur avec clé steamid et nom player 
-    #cat "$formatedPlayerList" | csvcut -c 1,4 | sed '1d'
+            		updateKDRequest="$updateKDRequest
+$invarUpdateKDRequest SET stats_statistics.$typeOfDeathFilled = stats_statistics.$typeOfDeathFilled + $playerNumberOfKill WHERE stats_players.steamid = '$playersLineSteamID' AND stats_statistics.server_id = $serverID;"
+            	fi
+            done < <(cat "$formatedPlayerList" | csvcut -c 1,4 | sed '1d')
+        done
 
-    #exit 0 
+        #Update the database with extracted data 
+        if [[ ! $totalDeathInFile -eq 0 ]]
+        then
+        	echo "Sending updates to the database !"
+        	mysql --force -h "$mysqlHost" -P "$mysqlPort" -u "$mysqlUser" -p"$mysqlPassword" -D "$mysqlStatsDatabase" -e "$updateKDRequest"
+        fi
+        unset updateKDRequest
+    else
+    	echo "No deaths or kills were found inside the file ! It was a quiet day :)"
+    fi
+
+    echo "-----"
+    echo "Messages sent in World chat: $(cat $f | cut -c 23- | grep "^\[World\] " | wc -l)"
+    echo "Messages sent in Group chat: $(cat $f | cut -c 23- | grep "^\[Group\] " | wc -l)"
+    echo "Messages sent in Area chat: $(cat $f | cut -c 23- | grep "^\[Area\] " | wc -l)"
+
+    echo "Moving file to the processed folder"
+    mv "$f" "${logsprocesseddir}/"
+    echo ""
     echo "========"
 
 done
+
+#Create a little discord message with the time taken to process everything
+discordTimeExecuted=$(date +%s)
+discordTimeElapsed=$((discordTimeExecuted-discordTimeLaunched))
+
+discordTimeElapsedHours=$((discordTimeElapsed / 3600))
+discordTimeElapsedMinutes=$(( (discordTimeElapsed % 3600) / 60 ))
+discordTimeElapsedSeconds=$(( (discordTimeElapsed % 3600) % 60 ))
+
+echo "$discordTimeElapsedHours:$discordTimeElapsedMinutes:$discordTimeElapsedSeconds"
+
+echo "Sending discord notification"
+
+$HOME/discord/source/discord.sh --webhook-url "$discordWebhook" --avatar "https://imgur.com/Ii4SoiK.png" --username "Pasta-Bot" --color "0x008000" --title "Statistics have been updated !" --description "Number of file scanned: \`$discordNumberFile\`\n Time elapsed: \`${discordTimeElapsedHours}h${discordTimeElapsedMinutes}min${discordTimeElapsedSeconds}s\`"
+
+echo "Every logs file have been processed"
+echo "Done - Bye !"
